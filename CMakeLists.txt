@@ -78,7 +78,7 @@ endif()
 set(TAG_OR_BRANCH "master" CACHE STRING "The name of the tag or branch to build")
 set(EXTRA_REPOSITORIES "" CACHE STRING "Extra repositories to install. Expected to have a CMake based build system.")
 set(EXTERNALPROJECT_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/inst)
-set(EXTERNALPROJECT_SITEPACKAGES_DIR ${EXTERNALPROJECT_INSTALL_PREFIX}/lib/python3.4/site-packages)
+set(EXTERNALPROJECT_SITEPACKAGES_DIR ${EXTERNALPROJECT_INSTALL_PREFIX}/lib/python3.5/site-packages)
 
 # Create the version-related variables
 # These can optionally be overridden from the build enviroment.
@@ -115,7 +115,7 @@ message(STATUS "Building Cura ${CURA_VERSION}")
 
 if(BUILD_OS_WIN32)
     # To deal with stupid setuptools not creating install directories
-    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/inst/lib/python3.4/site-packages)
+    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/inst/lib/python3.5/site-packages)
 endif()
 
 if(BUILD_PYTHON)
@@ -126,7 +126,7 @@ if(BUILD_PYTHON)
     endif()
 
     ExternalProject_Add(Python
-        URL https://www.python.org/ftp/python/3.4.3/Python-3.4.3.tgz
+        URL https://www.python.org/ftp/python/3.5.2/Python-3.5.2.tgz
         PATCH_COMMAND ${patch_command}
         CONFIGURE_COMMAND ./configure --prefix=${EXTERNALPROJECT_INSTALL_PREFIX} --enable-shared --with-threads --without-pymalloc
         BUILD_IN_SOURCE 1
@@ -136,7 +136,7 @@ if(BUILD_PYTHON)
     set(PYTHON_VERSION_MAJOR 3)
     set(PYTHON_VERSION_MINOR 4)
 else()
-    find_package(PythonInterp 3.4.0 REQUIRED)
+    find_package(PythonInterp 3.5.0 REQUIRED)
     add_custom_target(Python)
 endif()
 
@@ -219,7 +219,7 @@ if(BUILD_SIP)
             configure.py
             --platform win32-g++
             --bindir=${EXTERNALPROJECT_INSTALL_PREFIX}/bin
-            --destdir=${EXTERNALPROJECT_INSTALL_PREFIX}/lib/python3.4/site-packages
+            --destdir=${EXTERNALPROJECT_INSTALL_PREFIX}/lib/python3.5/site-packages
             --incdir=${EXTERNALPROJECT_INSTALL_PREFIX}/include
             --sipdir=${EXTERNALPROJECT_INSTALL_PREFIX}/share/sip
             "CFLAGS+=${CMAKE_C_FLAGS}"
@@ -256,7 +256,7 @@ if(BUILD_PYQT)
             --sip ${EXTERNALPROJECT_INSTALL_PREFIX}/bin/sip.exe
             --confirm-license
             --spec win32-g++
-            --destdir ${EXTERNALPROJECT_INSTALL_PREFIX}/lib/python3.4/site-packages
+            --destdir ${EXTERNALPROJECT_INSTALL_PREFIX}/lib/python3.5/site-packages
             --bindir ${EXTERNALPROJECT_INSTALL_PREFIX}/bin
             --sipdir ${EXTERNALPROJECT_INSTALL_PREFIX}/share/sip
             "CFLAGS+=${CMAKE_C_FLAGS}"
@@ -304,7 +304,7 @@ if(BUILD_OS_WINDOWS)
     # Because setuptools is stupid and will interpret "C:/..." as a relative path
     string(REPLACE "/" "\\" native_prefix ${EXTERNALPROJECT_INSTALL_PREFIX})
     set(python_install
-        --install-lib=${native_prefix}\\lib\\python3.4\\site-packages 
+        --install-lib=${native_prefix}\\lib\\python3.5\\site-packages 
         --install-data=${native_prefix}\\share
         --install-scripts=${native_prefix}\\bin
     )
@@ -407,7 +407,8 @@ if(BUILD_ZEROCONF)
 
     ExternalProject_Add(PythonZeroconf
         DEPENDS PythonNetifaces
-        URL https://github.com/jstasiak/python-zeroconf/archive/0.17.5.tar.gz
+        GIT_REPOSITORY https://github.com/jstasiak/python-zeroconf
+        GIT_TAG 0.17.6
         CONFIGURE_COMMAND ""
         BUILD_COMMAND ${PYTHON_EXECUTABLE} setup.py build
         INSTALL_COMMAND ${PYTHON_EXECUTABLE} setup.py install ${python_install}
@@ -467,6 +468,13 @@ ExternalProject_Add(Cura-PostProcessing
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNALPROJECT_INSTALL_PREFIX}
 )
 
+ExternalProject_Add(Cura-UM3NetworkPrinting
+    DEPENDS Cura
+    GIT_REPOSITORY https://github.com/Ultimaker/UM3NetworkPrintingPlugin
+    GIT_TAG origin/${TAG_OR_BRANCH}
+    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNALPROJECT_INSTALL_PREFIX}
+)
+
 ExternalProject_Add(cura-binary-data
     DEPENDS Cura
     GIT_REPOSITORY https://github.com/ultimaker/cura-binary-data
@@ -481,6 +489,16 @@ ExternalProject_Add(Cura-Doodle3D
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNALPROJECT_INSTALL_PREFIX}
 )
 
+
+ExternalProject_Add(fdm_materials
+    DEPENDS Cura
+    GIT_REPOSITORY https://github.com/ultimaker/fdm_materials
+    GIT_TAG origin/${TAG_OR_BRANCH}
+    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNALPROJECT_INSTALL_PREFIX}
+)
+
+set(_last_repo fdm_materials) # To make sure ordering for extra repositories is preserved
+
 foreach(repo ${EXTRA_REPOSITORIES})
     separate_arguments(items UNIX_COMMAND "${repo}")
     list(GET items 0 name)
@@ -493,10 +511,13 @@ foreach(repo ${EXTRA_REPOSITORIES})
     endforeach()
 
     ExternalProject_Add(${name}
+        DEPENDS ${_last_repo} cura-binary-data
         GIT_REPOSITORY ${repo}
         GIT_TAG origin/master
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNALPROJECT_INSTALL_PREFIX} ${cmake}
     )
+
+    set(_last_repo ${name})
 endforeach()
 
 if(BUILD_OS_OSX)
@@ -587,8 +608,8 @@ elseif(BUILD_OS_WINDOWS)
     )
     add_custom_command(
         TARGET build_exe POST_BUILD
-        COMMAND ${PYTHON_EXECUTABLE} setup_win32.py py2exe
-        COMMENT "Running py2exe"
+        COMMAND ${PYTHON_EXECUTABLE} setup_win32.py build
+        COMMENT "Running cx_Freeze"
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
 
@@ -642,17 +663,17 @@ set(CPACK_PACKAGE_EXECUTABLES Cura "Cura ${CURA_MAJOR_VERSION}.${CURA_MINOR_VERS
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "Cura ${CURA_MAJOR_VERSION}.${CURA_MINOR_VERSION}")
 
 set(RPM_REQUIRES
-    "python3 >= 3.4.0"
-    "python3-qt5 >= 5.4.0"
+    "python3 >= 3.5.0"
+    "python3-qt5 >= 5.6.0"
     "python3-numpy >= 1.9.0"
-    "qt5-qtquickcontrols >= 5.4.0"
+    "qt5-qtquickcontrols >= 5.6.0"
 )
 string(REPLACE ";" "," RPM_REQUIRES "${RPM_REQUIRES}")
 set(CPACK_RPM_PACKAGE_REQUIRES ${RPM_REQUIRES})
 set(CPACK_RPM_PACKAGE_RELOCATABLE OFF)
 
 set(DEB_DEPENDS
-    "python3 (>= 3.4.0)"
+    "python3 (>= 3.5.0)"
     "libgfortran3"
 )
 string(REPLACE ";" "," DEB_DEPENDS "${DEB_DEPENDS}")
